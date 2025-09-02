@@ -862,7 +862,7 @@ export function Dashboard({ user, onSignOut }: DashboardProps) {
         <div className="ml-4">
           <p className="text-sm font-medium text-gray-600">Pipeline</p>
           <p className="text-2xl font-semibold text-gray-900">
-            ${(stats.totalPipelineAmount || 0).toLocaleString()}
+            ₹{(stats.totalPipelineAmount || 0).toLocaleString()}
           </p>
         </div>
       </div>

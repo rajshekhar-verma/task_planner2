@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0"
+    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+    "setup": "node setup.js",
+    "deploy": "node deploy-netlify.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.0",

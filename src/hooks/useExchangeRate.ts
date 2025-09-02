@@ -86,15 +86,15 @@ export function useExchangeRate() {
   }, []);
 
   const convertUSDtoINR = (amountUSD: number, project?: Project): number => {
-    if (!amountUSD || exchangeRate === null) return 0;
+    if (!amountUSD) return 0;
     
-    // If project has a custom conversion factor, use it
+    // If project has a custom conversion factor, apply it
     if (project?.inr_conversion_factor) {
-      return amountUSD * exchangeRate * project.inr_conversion_factor;
+      return amountUSD * project.inr_conversion_factor;
     }
     
-    // Default conversion
-    return amountUSD * exchangeRate;
+    // Return the amount as-is (already in rupees)
+    return amountUSD;
   };
 
   return {

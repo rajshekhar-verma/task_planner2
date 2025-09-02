@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { FileText, Plus, Eye, Send, DollarSign, Calendar, User, Edit, Trash2, X, AlertTriangle, CheckCircle, Clock, Filter, RefreshCw, Mail, CreditCard, Ban, Check } from 'lucide-react';
+import { FileText, Plus, Eye, Send, CheckCircle, X, Calendar, DollarSign, User, Edit, Trash2, RefreshCw, AlertTriangle, Filter, ChevronDown, ChevronUp } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { Invoice, InvoiceItem, Project, Task, User as UserType, InvoiceWithItems, TaskForInvoicing } from '../types';
+import { Invoice, InvoiceWithItems, InvoiceItem, Project, Task, User as UserType, TaskForInvoicing } from '../types';
 import { format } from 'date-fns';
 
 interface InvoiceManagementProps {
@@ -13,46 +13,68 @@ interface InvoiceManagementProps {
 }
 
 export function InvoiceManagement({ invoices, projects, tasks, user, onRefresh }: InvoiceManagementProps) {
+  const [invoicesWithItems, setInvoicesWithItems] = useState<InvoiceWithItems[]>([]);
+  const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
-  const [showCancelModal, setShowCancelModal] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<InvoiceWithItems | null>(null);
-  const [invoiceToCancel, setInvoiceToCancel] = useState<Invoice | null>(null);
-  const [cancellationReason, setCancellationReason] = useState('');
   const [filterProject, setFilterProject] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<string>('all');
-  const [loading, setLoading] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
-
-  // Create Invoice Modal State
-  const [createFormData, setCreateFormData] = useState({
-    project_id: '',
-    recipient_email: '',
-    recipient_name: '',
-    tax_amount: 0,
-    discount_amount: 0,
-    notes: '',
-    due_date: '',
-    bill_to_address: '',
-    bill_from_address: '',
-    bank_details: ''
-  });
+  const [isExpanded, setIsExpanded] = useState(true);
+  
+  // Create invoice form state
+  const [selectedProjectId, setSelectedProjectId] = useState<string>('');
+  const [recipientEmail, setRecipientEmail] = useState('');
+  const [recipientName, setRecipientName] = useState('');
   const [selectedTasks, setSelectedTasks] = useState<string[]>([]);
+  const [taxAmount, setTaxAmount] = useState<number>(0);
+  const [discountAmount, setDiscountAmount] = useState<number>(0);
+  const [notes, setNotes] = useState('');
+  const [dueDate, setDueDate] = useState('');
+  const [isCreating, setIsCreating] = useState(false);
+  const [isSending, setIsSending] = useState(false);
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'draft': return 'bg-gray-100 text-gray-800';
-      case 'sent': return 'bg-blue-100 text-blue-800';
-      case 'paid': return 'bg-green-100 text-green-800';
-      case 'overdue': return 'bg-red-100 text-red-800';
-      case 'cancelled': return 'bg-red-100 text-red-800';
-      default: return 'bg-gray-100 text-gray-800';
+  useEffect(() => {
+    loadInvoicesWithItems();
+  }, [invoices]);
+
+  const loadInvoicesWithItems = async () => {
+    try {
+      setLoading(true);
+      
+      const invoicesWithItemsData: InvoiceWithItems[] = await Promise.all(
+        invoices.map(async (invoice) => {
+          const { data: items, error } = await supabase
+            .from('invoice_items')
+            .select(`
+              *,
+              tasks:task_id(title)
+            `)
+            .eq('invoice_id', invoice.id);
+
+          if (error) {
+            console.error('Error loading invoice items:', error);
+            return { ...invoice, items: [] };
+          }
+
+          const formattedItems: InvoiceItem[] = items?.map(item => ({
+            ...item,
+            task_title: item.tasks?.title
+          })) || [];
+
+          return { ...invoice, items: formattedItems };
+        })
+      );
+
+      setInvoicesWithItems(invoicesWithItemsData);
+    } catch (error) {
+      console.error('Error loading invoices with items:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const getAvailableTasksForProject = (projectId: string): TaskForInvoicing[] => {
-    if (!projectId) return [];
-    
+  const getAvailableTasksForInvoicing = (projectId: string): TaskForInvoicing[] => {
     const project = projects.find(p => p.id === projectId);
     if (!project) return [];
 
@@ -70,70 +92,71 @@ export function InvoiceManagement({ invoices, projects, tasks, user, onRefresh }
         status: task.status,
         invoice_status: task.invoice_status || 'not_invoiced',
         completed_at: task.updated_at,
-        project_rate: project.rate_type === 'hourly' ? (project.hourly_rate || 0) : (project.fixed_rate || 0),
+        project_rate: project.hourly_rate || 0,
         rate_type: project.rate_type || 'hourly'
       }));
   };
 
-  const handleCreateInvoice = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (selectedTasks.length === 0) {
-      alert('Please select at least one task to invoice.');
+  const calculateInvoiceTotal = () => {
+    const project = projects.find(p => p.id === selectedProjectId);
+    if (!project) return { subtotal: 0, total: 0 };
+
+    const selectedTasksData = getAvailableTasksForInvoicing(selectedProjectId)
+      .filter(task => selectedTasks.includes(task.id));
+
+    const subtotal = selectedTasksData.reduce((sum, task) => {
+      if (project.rate_type === 'hourly') {
+        return sum + (task.hours_worked * project.hourly_rate!);
+      } else {
+        return sum + (project.fixed_rate! / selectedTasksData.length);
+      }
+    }, 0);
+
+    const total = subtotal + taxAmount - discountAmount;
+    return { subtotal, total };
+  };
+
+  const generateInvoiceNumber = () => {
+    const date = new Date();
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+    return `INV-${year}${month}${day}-${random}`;
+  };
+
+  const handleCreateInvoice = async () => {
+    if (!selectedProjectId || selectedTasks.length === 0 || !recipientEmail) {
+      alert('Please fill in all required fields and select at least one task.');
       return;
     }
 
-    setIsProcessing(true);
+    setIsCreating(true);
     try {
-      const project = projects.find(p => p.id === createFormData.project_id);
-      if (!project) throw new Error('Project not found');
-
-      const tasksToInvoice = getAvailableTasksForProject(createFormData.project_id)
+      const project = projects.find(p => p.id === selectedProjectId)!;
+      const selectedTasksData = getAvailableTasksForInvoicing(selectedProjectId)
         .filter(task => selectedTasks.includes(task.id));
 
-      // Calculate totals
-      let totalAmount = 0;
-      const invoiceItems = tasksToInvoice.map(task => {
-        const amount = project.rate_type === 'hourly' 
-          ? task.hours_worked * (project.hourly_rate || 0)
-          : (project.fixed_rate || 0) / tasksToInvoice.length;
-        
-        totalAmount += amount;
-        
-        return {
-          task_id: task.id,
-          description: task.title,
-          hours_billed: task.hours_worked,
-          rate: project.rate_type === 'hourly' ? (project.hourly_rate || 0) : (project.fixed_rate || 0),
-          amount: amount
-        };
-      });
-
-      const finalAmount = totalAmount + createFormData.tax_amount - createFormData.discount_amount;
-
-      // Generate invoice number
-      const invoiceCount = invoices.length + 1;
-      const invoiceNumber = `INV-${new Date().getFullYear()}-${invoiceCount.toString().padStart(4, '0')}`;
+      const { subtotal, total } = calculateInvoiceTotal();
+      const invoiceNumber = generateInvoiceNumber();
 
       // Create invoice
       const { data: invoice, error: invoiceError } = await supabase
         .from('invoices')
         .insert({
-          project_id: createFormData.project_id,
+          project_id: selectedProjectId,
           invoice_number: invoiceNumber,
-          recipient_email: createFormData.recipient_email,
-          recipient_name: createFormData.recipient_name || null,
-          total_amount: totalAmount,
-          tax_amount: createFormData.tax_amount,
-          discount_amount: createFormData.discount_amount,
-          final_amount: finalAmount,
+          recipient_email: recipientEmail,
+          recipient_name: recipientName || null,
+          total_amount: subtotal,
+          tax_amount: taxAmount,
+          discount_amount: discountAmount,
+          final_amount: total,
           status: 'draft',
           issue_date: new Date().toISOString().split('T')[0],
-          due_date: createFormData.due_date || null,
-          notes: createFormData.notes || null,
-          created_by: user.id,
-          bill_to_address: createFormData.bill_to_address || null,
-          bill_from_address: createFormData.bill_from_address || null,
-          bank_details: createFormData.bank_details || null
+          due_date: dueDate || null,
+          notes: notes || null,
+          created_by: user.id
         })
         .select()
         .single();
@@ -141,14 +164,20 @@ export function InvoiceManagement({ invoices, projects, tasks, user, onRefresh }
       if (invoiceError) throw invoiceError;
 
       // Create invoice items
-      const itemsWithInvoiceId = invoiceItems.map(item => ({
-        ...item,
-        invoice_id: invoice.id
+      const invoiceItems = selectedTasksData.map(task => ({
+        invoice_id: invoice.id,
+        task_id: task.id,
+        description: task.title,
+        hours_billed: task.hours_worked,
+        rate: project.hourly_rate || 0,
+        amount: project.rate_type === 'hourly' 
+          ? task.hours_worked * (project.hourly_rate || 0)
+          : (project.fixed_rate || 0) / selectedTasksData.length
       }));
 
       const { error: itemsError } = await supabase
         .from('invoice_items')
-        .insert(itemsWithInvoiceId);
+        .insert(invoiceItems);
 
       if (itemsError) throw itemsError;
 
@@ -160,322 +189,100 @@ export function InvoiceManagement({ invoices, projects, tasks, user, onRefresh }
 
       if (taskUpdateError) throw taskUpdateError;
 
+      // Reset form
+      setSelectedProjectId('');
+      setRecipientEmail('');
+      setRecipientName('');
+      setSelectedTasks([]);
+      setTaxAmount(0);
+      setDiscountAmount(0);
+      setNotes('');
+      setDueDate('');
+      setShowCreateModal(false);
+
       // Refresh data
       await onRefresh();
-      
-      // Reset form
-      setCreateFormData({
-        project_id: '',
-        recipient_email: '',
-        recipient_name: '',
-        tax_amount: 0,
-        discount_amount: 0,
-        notes: '',
-        due_date: '',
-        bill_to_address: '',
-        bill_from_address: '',
-        bank_details: ''
-      });
-      setSelectedTasks([]);
-      setShowCreateModal(false);
-      
+      await loadInvoicesWithItems();
+
       alert('Invoice created successfully!');
     } catch (error) {
       console.error('Error creating invoice:', error);
-      alert('Failed to create invoice: ' + (error instanceof Error ? error.message : 'Unknown error'));
+      alert('Failed to create invoice');
     } finally {
-      setIsProcessing(false);
+      setIsCreating(false);
     }
   };
 
-  const handleFinalizeInvoice = async (invoiceId: string) => {
-    if (!window.confirm('Are you sure you want to finalize this invoice? This will create receivables and cannot be undone.')) return;
-
-    setIsProcessing(true);
-    try {
-      // Update invoice status to sent (finalized)
-      const { error } = await supabase
-        .from('invoices')
-        .update({
-          status: 'sent',
-          sent_at: new Date().toISOString()
-        })
-        .eq('id', invoiceId);
-
-              const { error: taskUpdateError } = await supabase
-        .from('tasks')
-        .update({ invoice_status: 'invoiced' })
-        .in('id', selectedTasks);
-
-        if (taskUpdateError) throw taskUpdateError;
-
-      if (error) throw error;
-
-      await onRefresh();
-      alert('Invoice finalized successfully! Receivables have been created.');
-    } catch (error) {
-      console.error('Error finalizing invoice:', error);
-      alert('Failed to finalize invoice: ' + (error instanceof Error ? error.message : 'Unknown error'));
-    } finally {
-      setIsProcessing(false);
+  const handleSendInvoice = async (invoice: InvoiceWithItems) => {
+    if (invoice.status !== 'draft') {
+      alert('Only draft invoices can be sent.');
+      return;
     }
-  };
 
-  const handleViewInvoice = async (invoice: Invoice) => {
-    setLoading(true);
+    setIsSending(true);
     try {
-      const { data: invoiceItems, error } = await supabase
-        .from('invoice_items')
-        .select(`
-          *,
-          tasks!inner(title)
-        `)
-        .eq('invoice_id', invoice.id);
-
-      if (error) throw error;
-
-      const invoiceWithItems: InvoiceWithItems = {
-        ...invoice,
-        items: invoiceItems.map(item => ({
-          ...item,
-          task_title: item.tasks?.title
-        }))
-      };
-
-      setSelectedInvoice(invoiceWithItems);
-      setShowViewModal(true);
-    } catch (error) {
-      console.error('Error loading invoice details:', error);
-      alert('Failed to load invoice details');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSendInvoice = async (invoiceId: string) => {
-    if (!window.confirm('Are you sure you want to send this invoice?')) return;
-
-    setIsProcessing(true);
-    try {
-      // Call the edge function to send email
+      // Call the send-invoice-email edge function
       const { data, error } = await supabase.functions.invoke('send-invoice-email', {
-        body: { invoiceId }
+        body: { invoiceId: invoice.id }
       });
 
       if (error) throw error;
 
-      await onRefresh();
       alert(data.message || 'Invoice sent successfully!');
+      
+      // Refresh data
+      await onRefresh();
+      await loadInvoicesWithItems();
     } catch (error) {
       console.error('Error sending invoice:', error);
-      alert('Failed to send invoice: ' + (error instanceof Error ? error.message : 'Unknown error'));
+      alert('Failed to send invoice');
     } finally {
-      setIsProcessing(false);
+      setIsSending(false);
     }
   };
 
-  const handleMarkAsPaid = async (invoiceId: string) => {
-    if (!window.confirm('Are you sure you want to mark this invoice as paid? This will update existing receivables and create revenue records.')) return;
-
-    setIsProcessing(true);
-    try {
-      // First, get the invoice details with items
-      const { data: invoice, error: invoiceError } = await supabase
-        .from('invoices')
-        .select(`
-          *,
-          invoice_items(
-            *,
-            tasks!inner(id, title, hours_worked)
-          )
-        `)
-        .eq('id', invoiceId)
-        .single();
-
-      if (invoiceError) throw invoiceError;
-      if (!invoice) throw new Error('Invoice not found');
-
-      // Update invoice status to paid
-      const { error: updateError } = await supabase
-        .from('invoices')
-        .update({
-          status: 'paid',
-          paid_at: new Date().toISOString()
-        })
-        .eq('id', invoiceId);
-
-      if (updateError) throw updateError;
-
-      // For each task in the invoice, find and update the existing receivable
-      for (const item of invoice.invoice_items) {
-        // Find the existing receivable for this task
-        const { data: existingReceivables, error: receivableError } = await supabase
-          .from('receivables')
-          .select('*')
-          .eq('task_id', item.task_id)
-          .eq('project_id', invoice.project_id);
-
-        if (receivableError) throw receivableError;
-
-        if (existingReceivables && existingReceivables.length > 0) {
-          const receivable = existingReceivables[0];
-
-          // Update the receivable status to paid
-          const { error: updateReceivableError } = await supabase
-            .from('receivables')
-            .update({
-              status: 'paid',
-              paid_at: new Date().toISOString(),
-              notes: `Payment received for invoice ${invoice.invoice_number}`
-            })
-            .eq('id', receivable.id);
-
-          if (updateReceivableError) throw updateReceivableError;
-
-          // Create a revenue record for the full receivable amount
-          const { error: revenueError } = await supabase
-            .from('revenue_records')
-            .insert({
-              receivable_id: receivable.id,
-              amount: receivable.amount,
-              recorded_at: new Date().toISOString(),
-              notes: `Revenue recorded from invoice ${invoice.invoice_number} payment`
-            });
-
-          if (revenueError) throw revenueError;
-        }
-      }
-
-      // Update task invoice status to paid
-      const taskIds = invoice.invoice_items.map(item => item.task_id);
-      const { error: taskUpdateError } = await supabase
-        .from('tasks')
-        .update({ invoice_status: 'paid' })
-        .in('id', taskIds);
-
-      if (taskUpdateError) throw taskUpdateError;
-
-      await onRefresh();
-      alert('Invoice marked as paid successfully! Receivables and revenue records have been updated.');
-    } catch (error) {
-      console.error('Error marking invoice as paid:', error);
-      alert('Failed to mark invoice as paid: ' + (error instanceof Error ? error.message : 'Unknown error'));
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const handleCancelInvoice = (invoice: Invoice) => {
-    setInvoiceToCancel(invoice);
-    setCancellationReason('');
-    setShowCancelModal(true);
-  };
-
-  const processCancellation = async () => {
-    if (!invoiceToCancel || !cancellationReason.trim()) {
-      alert('Please provide a cancellation reason.');
+  const handleCancelInvoice = async (invoice: InvoiceWithItems) => {
+    if (!confirm(`Are you sure you want to cancel invoice ${invoice.invoice_number}? This action cannot be undone.`)) {
       return;
     }
 
-    setIsProcessing(true);
     try {
-      // Get original amounts for notes
-      const originalTotal = invoiceToCancel.total_amount;
-      const originalFinal = invoiceToCancel.final_amount;
-
-      // Create cancellation note with original amounts (only once)
-      const cancellationNote = `[CANCELLED on ${format(new Date(), 'MMM dd, yyyy')}] Reason: ${cancellationReason.trim()}. Original total amount: $${originalTotal.toFixed(2)}, Original final amount: $${originalFinal.toFixed(2)}`;
+      // Update invoice status to cancelled and add cancellation note
+      const cancellationNote = `Invoice cancelled on ${format(new Date(), 'MMM dd, yyyy')}. Original final amount: ₹${invoice.final_amount.toFixed(2)}`;
       
-      const updatedNotes = invoiceToCancel.notes 
-        ? `${invoiceToCancel.notes}\n\n${cancellationNote}`
-        : cancellationNote;
-
-      const { error: invoiceError } = await supabase
+      const { error } = await supabase
         .from('invoices')
         .update({
           status: 'cancelled',
-          total_amount: 0,
-          final_amount: 0,
-          notes: updatedNotes
+          notes: invoice.notes ? `${invoice.notes}\n\n${cancellationNote}` : cancellationNote
         })
-        .eq('id', invoiceToCancel.id);
+        .eq('id', invoice.id);
 
-      if (invoiceError) throw invoiceError;
+      if (error) throw error;
 
-      // Get all tasks related to this invoice
-      const { data: invoiceItems, error: itemsError } = await supabase
-        .from('invoice_items')
-        .select('task_id')
-        .eq('invoice_id', invoiceToCancel.id);
-
-      if (itemsError) throw itemsError;
-
-      const taskIds = invoiceItems.map(item => item.task_id);
-
-      // Update all related tasks
-      if (taskIds.length > 0) {
-        // Get current task data to update descriptions
-        const { data: currentTasks, error: tasksError } = await supabase
-          .from('tasks')
-          .select('id, description, status')
-          .in('id', taskIds);
-
-        if (tasksError) throw tasksError;
-
-        // Update each task
-        for (const task of currentTasks) {
-          let updatedDescription = task.description;
-          
-          // Add cancellation message to completed tasks
-          if (task.status === 'completed') {
-            const cancellationMessage = '\n\n[INVOICE CANCELLED] To invoice again, create new task.';
-            if (!updatedDescription.includes('[INVOICE CANCELLED]')) {
-              updatedDescription += cancellationMessage;
-            }
-          }
-
-          const { error: taskUpdateError } = await supabase
-            .from('tasks')
-            .update({
-              invoice_status: 'cancelled',
-              description: updatedDescription
-            })
-            .eq('id', task.id);
-
-          if (taskUpdateError) throw taskUpdateError;
-        }
-      }
-
-      // Update related receivables
-      const { error: receivablesError } = await supabase
-        .from('receivables')
-        .update({
-          status: 'cancelled',
-          notes: `Cancelled due to invoice cancellation. Reason: ${cancellationReason.trim()}`
-        })
-        .eq('project_id', invoiceToCancel.project_id)
-        .in('task_id', taskIds);
-
-      if (receivablesError) throw receivablesError;
-
-      // Refresh all data
+      // Refresh data
       await onRefresh();
-      
-      // Close modal and reset
-      setShowCancelModal(false);
-      setInvoiceToCancel(null);
-      setCancellationReason('');
-      
-      alert('Invoice cancelled successfully!');
+      await loadInvoicesWithItems();
+
+      alert('Invoice cancelled successfully');
     } catch (error) {
       console.error('Error cancelling invoice:', error);
-      alert('Failed to cancel invoice: ' + (error instanceof Error ? error.message : 'Unknown error'));
-    } finally {
-      setIsProcessing(false);
+      alert('Failed to cancel invoice');
     }
   };
 
-  const filteredInvoices = invoices.filter(invoice => {
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'draft': return 'bg-gray-100 text-gray-800';
+      case 'sent': return 'bg-blue-100 text-blue-800';
+      case 'paid': return 'bg-green-100 text-green-800';
+      case 'overdue': return 'bg-red-100 text-red-800';
+      case 'cancelled': return 'bg-red-100 text-red-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const filteredInvoices = invoicesWithItems.filter(invoice => {
     const matchesProject = filterProject === 'all' || invoice.project_id === filterProject;
     const matchesStatus = filterStatus === 'all' || invoice.status === filterStatus;
     return matchesProject && matchesStatus;
@@ -485,29 +292,45 @@ export function InvoiceManagement({ invoices, projects, tasks, user, onRefresh }
     const activeInvoices = filteredInvoices.filter(i => i.status !== 'cancelled');
     const cancelledInvoices = filteredInvoices.filter(i => i.status === 'cancelled');
     
-    const totalValue = activeInvoices.reduce((sum, i) => sum + i.final_amount, 0);
-    const paidValue = activeInvoices.filter(i => i.status === 'paid').reduce((sum, i) => sum + i.final_amount, 0);
-    const cancelledValue = cancelledInvoices.reduce((sum, i) => {
-      // Extract original amount from notes if available
-      const notesMatch = i.notes?.match(/Original final amount: \$([0-9,]+\.?[0-9]*)/);
+    const totalAmount = activeInvoices.reduce((sum, invoice) => sum + invoice.final_amount, 0);
+    const paidAmount = activeInvoices.filter(i => i.status === 'paid').reduce((sum, invoice) => sum + invoice.final_amount, 0);
+    const outstandingAmount = totalAmount - paidAmount;
+    
+    // Calculate cancelled amount from notes
+    const cancelledAmount = cancelledInvoices.reduce((sum, invoice) => {
+      const notesMatch = invoice.notes?.match(/Original final amount: ₹([0-9,]+\.?[0-9]*)/);
       if (notesMatch) {
         return sum + parseFloat(notesMatch[1].replace(/,/g, ''));
       }
-      return sum;
+      return sum + invoice.final_amount; // Fallback to current amount
     }, 0);
 
-    return {
-      totalInvoices: filteredInvoices.length,
-      activeInvoices: activeInvoices.length,
-      totalValue,
-      paidValue,
-      outstandingValue: totalValue - paidValue,
-      cancelledInvoices: cancelledInvoices.length,
-      cancelledValue
+    return { 
+      totalAmount, 
+      paidAmount, 
+      outstandingAmount, 
+      cancelledAmount,
+      activeCount: activeInvoices.length,
+      cancelledCount: cancelledInvoices.length
     };
   };
 
   const stats = getTotalStats();
+
+  if (loading) {
+    return (
+      <div className="card p-6">
+        <div className="animate-pulse">
+          <div className="h-6 bg-gray-200 rounded w-1/4 mb-4"></div>
+          <div className="space-y-3">
+            {[1, 2, 3].map(i => (
+              <div key={i} className="h-16 bg-gray-200 rounded"></div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -549,9 +372,9 @@ export function InvoiceManagement({ invoices, projects, tasks, user, onRefresh }
             </div>
             
             <button
-              onClick={onRefresh}
+              onClick={() => onRefresh().then(() => loadInvoicesWithItems())}
               className="btn-outline py-1 px-3 h-auto"
-              title="Refresh data"
+              title="Refresh invoices"
             >
               <RefreshCw className="w-4 h-4 mr-1" />
               Refresh
@@ -568,12 +391,12 @@ export function InvoiceManagement({ invoices, projects, tasks, user, onRefresh }
         </div>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-6 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-6">
           <div className="bg-blue-50 rounded-lg p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-blue-600 text-sm font-medium">Total Invoices</p>
-                <p className="text-2xl font-bold text-blue-900">{stats.totalInvoices}</p>
+                <p className="text-blue-600 text-sm font-medium">Total Active</p>
+                <p className="text-2xl font-bold text-blue-900">₹{stats.totalAmount.toFixed(2)}</p>
               </div>
               <FileText className="w-8 h-8 text-blue-600" />
             </div>
@@ -582,30 +405,10 @@ export function InvoiceManagement({ invoices, projects, tasks, user, onRefresh }
           <div className="bg-green-50 rounded-lg p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-green-600 text-sm font-medium">Active Invoices</p>
-                <p className="text-2xl font-bold text-green-900">{stats.activeInvoices}</p>
+                <p className="text-green-600 text-sm font-medium">Paid</p>
+                <p className="text-2xl font-bold text-green-900">₹{stats.paidAmount.toFixed(2)}</p>
               </div>
               <CheckCircle className="w-8 h-8 text-green-600" />
-            </div>
-          </div>
-
-          <div className="bg-purple-50 rounded-lg p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-purple-600 text-sm font-medium">Total Value</p>
-                <p className="text-2xl font-bold text-purple-900">${stats.totalValue.toFixed(0)}</p>
-              </div>
-              <DollarSign className="w-8 h-8 text-purple-600" />
-            </div>
-          </div>
-
-          <div className="bg-yellow-50 rounded-lg p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-yellow-600 text-sm font-medium">Paid</p>
-                <p className="text-2xl font-bold text-yellow-900">${stats.paidValue.toFixed(0)}</p>
-              </div>
-              <CreditCard className="w-8 h-8 text-yellow-600" />
             </div>
           </div>
 
@@ -613,9 +416,19 @@ export function InvoiceManagement({ invoices, projects, tasks, user, onRefresh }
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-orange-600 text-sm font-medium">Outstanding</p>
-                <p className="text-2xl font-bold text-orange-900">${stats.outstandingValue.toFixed(0)}</p>
+                <p className="text-2xl font-bold text-orange-900">₹{stats.outstandingAmount.toFixed(2)}</p>
               </div>
               <Clock className="w-8 h-8 text-orange-600" />
+            </div>
+          </div>
+
+          <div className="bg-purple-50 rounded-lg p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-purple-600 text-sm font-medium">Active Count</p>
+                <p className="text-2xl font-bold text-purple-900">{stats.activeCount}</p>
+              </div>
+              <Eye className="w-8 h-8 text-purple-600" />
             </div>
           </div>
 
@@ -623,10 +436,10 @@ export function InvoiceManagement({ invoices, projects, tasks, user, onRefresh }
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-red-600 text-sm font-medium">Cancelled</p>
-                <p className="text-2xl font-bold text-red-900">${stats.cancelledValue.toFixed(0)}</p>
-                <p className="text-xs text-red-600">({stats.cancelledInvoices} invoices)</p>
+                <p className="text-2xl font-bold text-red-900">₹{stats.cancelledAmount.toFixed(2)}</p>
+                <p className="text-xs text-red-500">{stats.cancelledCount} invoices</p>
               </div>
-              <Ban className="w-8 h-8 text-red-600" />
+              <X className="w-8 h-8 text-red-600" />
             </div>
           </div>
         </div>
@@ -634,284 +447,251 @@ export function InvoiceManagement({ invoices, projects, tasks, user, onRefresh }
 
       {/* Invoices List */}
       <div className="card p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">
-          Invoices List
-          {(filterProject !== 'all' || filterStatus !== 'all') && (
-            <span className="text-sm font-normal text-gray-500 ml-2">
-              - {filterProject !== 'all' && projects.find(p => p.id === filterProject)?.name}
-              {filterProject !== 'all' && filterStatus !== 'all' && ' • '}
-              {filterStatus !== 'all' && filterStatus.charAt(0).toUpperCase() + filterStatus.slice(1)}
-            </span>
-          )}
-        </h3>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-gray-900 flex items-center space-x-2">
+            <span>Invoices List</span>
+            {(filterProject !== 'all' || filterStatus !== 'all') && (
+              <span className="text-sm font-normal text-gray-500">
+                - {filterProject !== 'all' && projects.find(p => p.id === filterProject)?.name}
+                {filterProject !== 'all' && filterStatus !== 'all' && ' • '}
+                {filterStatus !== 'all' && filterStatus.charAt(0).toUpperCase() + filterStatus.slice(1)}
+              </span>
+            )}
+          </h3>
+          
+          {/* Expand/Collapse Button */}
+          <button
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="flex items-center space-x-2 px-3 py-1 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
+          >
+            {isExpanded ? (
+              <>
+                <ChevronUp className="w-4 h-4" />
+                <span>Collapse</span>
+              </>
+            ) : (
+              <>
+                <ChevronDown className="w-4 h-4" />
+                <span>Expand ({filteredInvoices.length})</span>
+              </>
+            )}
+          </button>
+        </div>
         
-        {filteredInvoices.length === 0 ? (
-          <div className="text-center py-8 text-gray-500">
-            <FileText className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-            <p>No invoices found.</p>
-            <p className="text-sm">Create your first invoice to get started.</p>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {filteredInvoices.map(invoice => (
-              <div key={invoice.id} className="border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center space-x-3 mb-3">
-                      <h4 className="text-xl font-semibold text-gray-900">{invoice.invoice_number}</h4>
-                      {/* Only show one status badge - if cancelled, show cancelled, otherwise show regular status */}
-                      <span className={`px-3 py-1 text-sm rounded-full font-medium ${getStatusColor(invoice.status)}`}>
-                        {invoice.status === 'cancelled' ? (
-                          <>
-                            <Ban className="h-4 w-4 mr-1 inline" />
-                            CANCELLED
-                          </>
-                        ) : (
-                          invoice.status.toUpperCase()
-                        )}
-                      </span>
-                    </div>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm text-gray-600 mb-4">
-                      <div>
-                        <span className="font-medium text-gray-700">Project:</span> 
-                        <div className="text-gray-900">{invoice.project_name}</div>
-                      </div>
-                      <div>
-                        <span className="font-medium text-gray-700">Recipient:</span> 
-                        <div className="text-gray-900">{invoice.recipient_email}</div>
-                      </div>
-                      <div>
-                        <span className="font-medium text-gray-700">Amount:</span> 
-                        <div className="text-gray-900">
-                          {invoice.status === 'cancelled' ? (
-                            <span className="line-through text-red-600">
-                              ${invoice.final_amount.toFixed(2)}
+        {isExpanded && (
+          <>
+            {filteredInvoices.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                <FileText className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+                <p>No invoices found.</p>
+                <p className="text-sm">Create your first invoice from completed tasks.</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {filteredInvoices.map(invoice => (
+                  <div key={invoice.id} className="border border-gray-200 rounded-lg p-4">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center space-x-3 mb-2">
+                          <h4 className="text-lg font-medium text-gray-900">{invoice.invoice_number}</h4>
+                          <span className={`px-2 py-1 text-xs rounded-full font-medium ${getStatusColor(invoice.status)}`}>
+                            {invoice.status.toUpperCase()}
+                          </span>
+                          {invoice.status === 'cancelled' && (
+                            <span className="px-2 py-1 text-xs bg-red-100 text-red-800 rounded-full">
+                              CANCELLED
                             </span>
-                          ) : (
-                            <span className="font-semibold">${invoice.final_amount.toFixed(2)}</span>
                           )}
                         </div>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm text-gray-600 mb-3">
+                          <div>
+                            <span className="font-medium">Project:</span> {invoice.project_name}
+                          </div>
+                          <div>
+                            <span className="font-medium">Recipient:</span> {invoice.recipient_email}
+                          </div>
+                          <div>
+                            <span className="font-medium">Issue Date:</span> {format(new Date(invoice.issue_date), 'MMM dd, yyyy')}
+                          </div>
+                          <div>
+                            <span className="font-medium">Amount:</span> ₹{invoice.final_amount.toFixed(2)}
+                          </div>
+                        </div>
+
+                        {/* Invoice Items Summary */}
+                        <div className="bg-gray-50 rounded p-3 mb-3">
+                          <div className="text-sm">
+                            <div className="flex justify-between mb-1">
+                              <span>Subtotal:</span>
+                              <span>₹{invoice.total_amount.toFixed(2)}</span>
+                            </div>
+                            {invoice.tax_amount > 0 && (
+                              <div className="flex justify-between mb-1">
+                                <span>Tax:</span>
+                                <span>₹{invoice.tax_amount.toFixed(2)}</span>
+                              </div>
+                            )}
+                            {invoice.discount_amount > 0 && (
+                              <div className="flex justify-between mb-1">
+                                <span>Discount:</span>
+                                <span>-₹{invoice.discount_amount.toFixed(2)}</span>
+                              </div>
+                            )}
+                            <div className="flex justify-between font-semibold border-t border-gray-200 pt-1">
+                              <span>Total:</span>
+                              <span>₹{invoice.final_amount.toFixed(2)}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Cancellation Notice */}
+                        {invoice.status === 'cancelled' && (
+                          <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+                            <div className="flex items-center text-sm text-red-800">
+                              <X className="h-4 w-4 mr-2" />
+                              <span className="font-medium">This invoice has been cancelled.</span>
+                            </div>
+                            {invoice.notes && (
+                              <p className="text-sm text-red-700 mt-1 italic">{invoice.notes}</p>
+                            )}
+                          </div>
+                        )}
                       </div>
-                      <div>
-                        <span className="font-medium text-gray-700">Date:</span> 
-                        <div className="text-gray-900">{format(new Date(invoice.issue_date), 'MMM dd, yyyy')}</div>
+                      
+                      <div className="flex items-center space-x-2">
+                        <button
+                          onClick={() => {
+                            setSelectedInvoice(invoice);
+                            setShowViewModal(true);
+                          }}
+                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                          title="View invoice details"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                        
+                        {invoice.status === 'draft' && (
+                          <button
+                            onClick={() => handleSendInvoice(invoice)}
+                            disabled={isSending}
+                            className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                            title="Send invoice"
+                          >
+                            <Send className="w-4 h-4" />
+                          </button>
+                        )}
+                        
+                        {invoice.status !== 'cancelled' && (
+                          <button
+                            onClick={() => handleCancelInvoice(invoice)}
+                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            title="Cancel invoice"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        )}
                       </div>
                     </div>
-
-                    {/* Cancellation Info */}
-                    {invoice.status === 'cancelled' && invoice.notes && (
-                      <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
-                        <div className="flex items-center text-sm text-red-800 mb-2">
-                          <Ban className="h-4 w-4 mr-2" />
-                          <span className="font-medium">Cancellation Details</span>
-                        </div>
-                        <p className="text-sm text-red-700 whitespace-pre-wrap">{invoice.notes}</p>
-                      </div>
-                    )}
                   </div>
-                  
-                  {/* Action Buttons */}
-                  <div className="flex items-center space-x-2 ml-6">
-                    {/* View Button - Always visible */}
-                    <button
-                      onClick={() => handleViewInvoice(invoice)}
-                      className="flex items-center space-x-1 px-3 py-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                      title="View invoice details"
-                    >
-                      <Eye className="w-4 h-4" />
-                      <span className="text-sm font-medium">View</span>
-                    </button>
-                    
-                    {/* Finalize Button - Only for draft invoices */}
-                    {invoice.status === 'draft' && (
-                      <button
-                        onClick={() => handleFinalizeInvoice(invoice.id)}
-                        disabled={isProcessing}
-                        className="flex items-center space-x-1 px-3 py-2 text-gray-600 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors disabled:opacity-50 border border-green-200 hover:border-green-300"
-                        title="Finalize invoice (creates receivables)"
-                      >
-                        <Check className="w-4 h-4" />
-                        <span className="text-sm font-medium">Finalize</span>
-                      </button>
-                    )}
-                    
-                    {/* Send Button - Only for draft invoices */}
-                    {invoice.status === 'draft' && (
-                      <button
-                        onClick={() => handleSendInvoice(invoice.id)}
-                        disabled={isProcessing}
-                        className="flex items-center space-x-1 px-3 py-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors disabled:opacity-50"
-                        title="Send invoice via email"
-                      >
-                        <Send className="w-4 h-4" />
-                        <span className="text-sm font-medium">Send</span>
-                      </button>
-                    )}
-                    
-                    {/* Mark as Paid Button - Only for sent/overdue invoices */}
-                    {(invoice.status === 'sent' || invoice.status === 'overdue') && (
-                      <button
-                        onClick={() => handleMarkAsPaid(invoice.id)}
-                        disabled={isProcessing}
-                        className="flex items-center space-x-1 px-3 py-2 text-gray-600 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors disabled:opacity-50"
-                        title="Mark as paid"
-                      >
-                        <CheckCircle className="w-4 h-4" />
-                        <span className="text-sm font-medium">Mark Paid</span>
-                      </button>
-                    )}
-                    
-                    {/* Cancel Button - Only for PAID invoices */}
-                    {invoice.status === 'paid' && (
-                      <button
-                        onClick={() => handleCancelInvoice(invoice)}
-                        disabled={isProcessing}
-                        className="flex items-center space-x-1 px-3 py-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50 border border-red-200 hover:border-red-300"
-                        title="Cancel paid invoice"
-                      >
-                        <Ban className="w-4 h-4" />
-                        <span className="text-sm font-medium">Cancel</span>
-                      </button>
-                    )}
-                  </div>
-                </div>
+                ))}
               </div>
-            ))}
-          </div>
+            )}
+          </>
         )}
       </div>
-
-      {/* Cancel Invoice Modal */}
-      {showCancelModal && invoiceToCancel && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-md w-full p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-900 flex items-center">
-                <AlertTriangle className="w-5 h-5 text-red-600 mr-2" />
-                Cancel Paid Invoice
-              </h3>
-              <button 
-                onClick={() => setShowCancelModal(false)} 
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            
-            <div className="space-y-4">
-              <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                <div className="text-sm text-red-800">
-                  <div className="font-medium mb-2">⚠️ Warning: This action will:</div>
-                  <ul className="list-disc list-inside space-y-1 text-xs">
-                    <li>Set invoice amounts to $0.00</li>
-                    <li>Mark all related tasks as 'cancelled'</li>
-                    <li>Mark all related receivables as 'cancelled'</li>
-                    <li>Add cancellation message to completed tasks</li>
-                    <li>Update analytics to reflect cancellation</li>
-                    <li><strong>This is typically used for refunds or payment disputes</strong></li>
-                  </ul>
-                </div>
-              </div>
-
-              <div className="bg-gray-50 rounded p-3">
-                <div className="text-sm text-gray-600">
-                  <div><strong>Invoice:</strong> {invoiceToCancel.invoice_number}</div>
-                  <div><strong>Amount:</strong> ${invoiceToCancel.final_amount.toFixed(2)}</div>
-                  <div><strong>Status:</strong> {invoiceToCancel.status.toUpperCase()}</div>
-                  <div><strong>Paid Date:</strong> {invoiceToCancel.paid_at ? format(new Date(invoiceToCancel.paid_at), 'MMM dd, yyyy') : 'N/A'}</div>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Cancellation Reason *
-                </label>
-                <textarea
-                  value={cancellationReason}
-                  onChange={(e) => setCancellationReason(e.target.value)}
-                  rows={3}
-                  className="input"
-                  placeholder="e.g., Client requested refund, Payment dispute, Service not delivered as agreed..."
-                  disabled={isProcessing}
-                  required
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  Please provide a detailed reason for cancelling this paid invoice.
-                </p>
-              </div>
-            </div>
-
-            <div className="flex space-x-3 mt-6">
-              <button
-                onClick={processCancellation}
-                disabled={isProcessing || !cancellationReason.trim()}
-                className="btn-primary bg-red-600 hover:bg-red-700 flex-1"
-              >
-                {isProcessing ? (
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
-                ) : (
-                  <Ban className="w-4 h-4 mr-2" />
-                )}
-                <span>{isProcessing ? 'Cancelling...' : 'Cancel Paid Invoice'}</span>
-              </button>
-              <button
-                onClick={() => setShowCancelModal(false)}
-                disabled={isProcessing}
-                className="btn-outline"
-              >
-                Keep Invoice
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Create Invoice Modal */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-4xl w-full p-6 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-lg max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-gray-900">Create New Invoice</h3>
               <button onClick={() => setShowCreateModal(false)} className="text-gray-400 hover:text-gray-600">
                 <X className="h-5 w-5" />
               </button>
             </div>
+            
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Project *
+                  </label>
+                  <select
+                    value={selectedProjectId}
+                    onChange={(e) => {
+                      setSelectedProjectId(e.target.value);
+                      setSelectedTasks([]);
+                    }}
+                    className="input"
+                    required
+                  >
+                    <option value="">Select a project</option>
+                    {projects.map(project => (
+                      <option key={project.id} value={project.id}>{project.name}</option>
+                    ))}
+                  </select>
+                </div>
 
-            <form onSubmit={handleCreateInvoice} className="space-y-6">
-              {/* Project Selection */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Project *
-                </label>
-                <select
-                  required
-                  value={createFormData.project_id}
-                  onChange={(e) => {
-                    setCreateFormData({ ...createFormData, project_id: e.target.value });
-                    setSelectedTasks([]);
-                  }}
-                  className="input"
-                >
-                  <option value="">Select a project</option>
-                  {projects.map(project => (
-                    <option key={project.id} value={project.id}>{project.name}</option>
-                  ))}
-                </select>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Due Date (Optional)
+                  </label>
+                  <input
+                    type="date"
+                    value={dueDate}
+                    onChange={(e) => setDueDate(e.target.value)}
+                    className="input"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Recipient Email *
+                  </label>
+                  <input
+                    type="email"
+                    value={recipientEmail}
+                    onChange={(e) => setRecipientEmail(e.target.value)}
+                    className="input"
+                    placeholder="client@example.com"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Recipient Name (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={recipientName}
+                    onChange={(e) => setRecipientName(e.target.value)}
+                    className="input"
+                    placeholder="Client Name"
+                  />
+                </div>
               </div>
 
               {/* Task Selection */}
-              {createFormData.project_id && (
+              {selectedProjectId && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Select Tasks to Invoice *
+                    Select Completed Tasks *
                   </label>
-                  <div className="border border-gray-300 rounded-lg p-4 max-h-60 overflow-y-auto">
-                    {getAvailableTasksForProject(createFormData.project_id).length === 0 ? (
-                      <p className="text-gray-500 text-sm">No completed tasks available for invoicing in this project.</p>
+                  <div className="border border-gray-300 rounded-lg max-h-48 overflow-y-auto">
+                    {getAvailableTasksForInvoicing(selectedProjectId).length === 0 ? (
+                      <div className="p-4 text-center text-gray-500">
+                        <AlertTriangle className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+                        <p>No completed tasks available for invoicing.</p>
+                        <p className="text-sm">Complete some tasks first to create an invoice.</p>
+                      </div>
                     ) : (
-                      <div className="space-y-2">
-                        {getAvailableTasksForProject(createFormData.project_id).map(task => (
+                      <div className="p-4 space-y-2">
+                        {getAvailableTasksForInvoicing(selectedProjectId).map(task => (
                           <label key={task.id} className="flex items-start space-x-3 p-2 hover:bg-gray-50 rounded">
                             <input
                               type="checkbox"
@@ -928,8 +708,7 @@ export function InvoiceManagement({ invoices, projects, tasks, user, onRefresh }
                             <div className="flex-1">
                               <div className="font-medium text-gray-900">{task.title}</div>
                               <div className="text-sm text-gray-600">
-                                {task.hours_worked}h worked • ${task.project_rate}/hr • 
-                                ${(task.hours_worked * task.project_rate).toFixed(2)}
+                                {task.hours_worked}h worked • ₹{(task.hours_worked * task.project_rate).toFixed(2)}
                               </div>
                             </div>
                           </label>
@@ -940,154 +719,97 @@ export function InvoiceManagement({ invoices, projects, tasks, user, onRefresh }
                 </div>
               )}
 
-              {/* Recipient Information */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Recipient Email *
-                  </label>
-                  <input
-                    type="email"
-                    required
-                    value={createFormData.recipient_email}
-                    onChange={(e) => setCreateFormData({ ...createFormData, recipient_email: e.target.value })}
-                    className="input"
-                    placeholder="client@example.com"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Recipient Name
-                  </label>
-                  <input
-                    type="text"
-                    value={createFormData.recipient_name}
-                    onChange={(e) => setCreateFormData({ ...createFormData, recipient_name: e.target.value })}
-                    className="input"
-                    placeholder="Client Name"
-                  />
-                </div>
-              </div>
-
               {/* Financial Details */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Tax Amount ($)
-                  </label>
-                  <input
-                    type="number"
-                    value={createFormData.tax_amount}
-                    onChange={(e) => setCreateFormData({ ...createFormData, tax_amount: Number(e.target.value) })}
-                    min="0"
-                    step="0.01"
-                    className="input"
-                    placeholder="0.00"
-                  />
-                </div>
+              {selectedTasks.length > 0 && (
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <h4 className="font-medium text-gray-900 mb-3">Invoice Calculation</h4>
+                  
+                  <div className="grid grid-cols-2 gap-4 mb-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Tax Amount (₹)
+                      </label>
+                      <input
+                        type="number"
+                        value={taxAmount}
+                        onChange={(e) => setTaxAmount(Number(e.target.value))}
+                        min="0"
+                        step="0.01"
+                        className="input"
+                      />
+                    </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Discount Amount ($)
-                  </label>
-                  <input
-                    type="number"
-                    value={createFormData.discount_amount}
-                    onChange={(e) => setCreateFormData({ ...createFormData, discount_amount: Number(e.target.value) })}
-                    min="0"
-                    step="0.01"
-                    className="input"
-                    placeholder="0.00"
-                  />
-                </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Discount Amount (₹)
+                      </label>
+                      <input
+                        type="number"
+                        value={discountAmount}
+                        onChange={(e) => setDiscountAmount(Number(e.target.value))}
+                        min="0"
+                        step="0.01"
+                        className="input"
+                      />
+                    </div>
+                  </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Due Date
-                  </label>
-                  <input
-                    type="date"
-                    value={createFormData.due_date}
-                    onChange={(e) => setCreateFormData({ ...createFormData, due_date: e.target.value })}
-                    className="input"
-                  />
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span>Subtotal:</span>
+                      <span>₹{calculateInvoiceTotal().subtotal.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Tax:</span>
+                      <span>₹{taxAmount.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Discount:</span>
+                      <span>-₹{discountAmount.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between font-semibold border-t border-gray-200 pt-2">
+                      <span>Total:</span>
+                      <span>₹{calculateInvoiceTotal().total.toFixed(2)}</span>
+                    </div>
+                  </div>
                 </div>
+              )}
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Notes (Optional)
+                </label>
+                <textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  rows={3}
+                  className="input"
+                  placeholder="Additional notes for the invoice..."
+                />
               </div>
+            </div>
 
-              {/* Additional Information */}
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Bill To Address
-                  </label>
-                  <textarea
-                    value={createFormData.bill_to_address}
-                    onChange={(e) => setCreateFormData({ ...createFormData, bill_to_address: e.target.value })}
-                    rows={3}
-                    className="input"
-                    placeholder="Client's billing address..."
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Bill From Address
-                  </label>
-                  <textarea
-                    value={createFormData.bill_from_address}
-                    onChange={(e) => setCreateFormData({ ...createFormData, bill_from_address: e.target.value })}
-                    rows={3}
-                    className="input"
-                    placeholder="Your business address..."
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Bank Details
-                  </label>
-                  <textarea
-                    value={createFormData.bank_details}
-                    onChange={(e) => setCreateFormData({ ...createFormData, bank_details: e.target.value })}
-                    rows={3}
-                    className="input"
-                    placeholder="Bank account details for payment..."
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Notes
-                  </label>
-                  <textarea
-                    value={createFormData.notes}
-                    onChange={(e) => setCreateFormData({ ...createFormData, notes: e.target.value })}
-                    rows={3}
-                    className="input"
-                    placeholder="Additional notes or terms..."
-                  />
-                </div>
-              </div>
-
-              <div className="flex space-x-3 pt-4">
-                <button 
-                  type="submit" 
-                  className="btn-primary flex-1"
-                  disabled={isProcessing || selectedTasks.length === 0}
-                >
-                  {isProcessing ? (
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
-                  ) : (
-                    <Plus className="w-4 h-4 mr-2" />
-                  )}
-                  <span>{isProcessing ? 'Creating...' : 'Create Invoice'}</span>
-                </button>
-                <button type="button" onClick={() => setShowCreateModal(false)} className="btn-outline">
-                  Cancel
-                </button>
-              </div>
-            </form>
+            <div className="flex space-x-3 mt-6">
+              <button
+                onClick={handleCreateInvoice}
+                disabled={isCreating || !selectedProjectId || selectedTasks.length === 0 || !recipientEmail}
+                className="btn-primary flex-1"
+              >
+                {isCreating ? (
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                ) : (
+                  <FileText className="w-4 h-4 mr-2" />
+                )}
+                <span>{isCreating ? 'Creating...' : 'Create Invoice'}</span>
+              </button>
+              <button
+                onClick={() => setShowCreateModal(false)}
+                disabled={isCreating}
+                className="btn-outline"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -1099,115 +821,124 @@ export function InvoiceManagement({ invoices, projects, tasks, user, onRefresh }
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-xl font-semibold text-gray-900">Invoice Details</h3>
               <button onClick={() => setShowViewModal(false)} className="text-gray-400 hover:text-gray-600">
-                <X className="h-5 w-5" />
+                <X className="h-6 w-6" />
               </button>
             </div>
-
-            <div className="space-y-6">
-              {/* Invoice Header */}
-              <div className="bg-blue-50 rounded-lg p-6 border border-blue-200">
-                <div className="flex justify-between items-start mb-4">
-                  <div>
-                    <h2 className="text-2xl font-bold text-blue-900">{selectedInvoice.invoice_number}</h2>
-                    <p className="text-blue-700">Project: {selectedInvoice.project_name}</p>
-                  </div>
+            
+            {/* Invoice Header */}
+            <div className="bg-blue-50 rounded-lg p-6 mb-6">
+              <div className="flex justify-between items-start">
+                <div>
+                  <h2 className="text-2xl font-bold text-blue-900 mb-2">{selectedInvoice.invoice_number}</h2>
+                  <p className="text-blue-700">Project: {selectedInvoice.project_name}</p>
+                </div>
+                <div className="text-right">
                   <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(selectedInvoice.status)}`}>
                     {selectedInvoice.status.toUpperCase()}
                   </span>
                 </div>
-                
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                  <div>
-                    <span className="text-blue-600 font-medium">Issue Date:</span>
-                    <div className="text-blue-900">{format(new Date(selectedInvoice.issue_date), 'MMM dd, yyyy')}</div>
-                  </div>
+              </div>
+              
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4 text-sm">
+                <div>
+                  <span className="text-blue-600 font-medium">Issue Date:</span>
+                  <div className="text-blue-900">{format(new Date(selectedInvoice.issue_date), 'MMM dd, yyyy')}</div>
+                </div>
+                {selectedInvoice.due_date && (
                   <div>
                     <span className="text-blue-600 font-medium">Due Date:</span>
-                    <div className="text-blue-900">
-                      {selectedInvoice.due_date ? format(new Date(selectedInvoice.due_date), 'MMM dd, yyyy') : 'N/A'}
-                    </div>
+                    <div className="text-blue-900">{format(new Date(selectedInvoice.due_date), 'MMM dd, yyyy')}</div>
                   </div>
-                  <div>
-                    <span className="text-blue-600 font-medium">Recipient:</span>
-                    <div className="text-blue-900">{selectedInvoice.recipient_email}</div>
-                  </div>
-                  <div>
-                    <span className="text-blue-600 font-medium">Status:</span>
-                    <div className="text-blue-900">{selectedInvoice.status.toUpperCase()}</div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Invoice Items */}
-              <div>
-                <h4 className="text-lg font-semibold text-gray-900 mb-3">Invoice Items</h4>
-                <div className="overflow-x-auto">
-                  <table className="w-full border border-gray-200 rounded-lg">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Description</th>
-                        <th className="px-4 py-3 text-right text-sm font-medium text-gray-700">Hours</th>
-                        <th className="px-4 py-3 text-right text-sm font-medium text-gray-700">Rate</th>
-                        <th className="px-4 py-3 text-right text-sm font-medium text-gray-700">Amount</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-200">
-                      {selectedInvoice.items.map(item => (
-                        <tr key={item.id}>
-                          <td className="px-4 py-3 text-sm text-gray-900">{item.task_title || item.description}</td>
-                          <td className="px-4 py-3 text-sm text-gray-900 text-right">{item.hours_billed}</td>
-                          <td className="px-4 py-3 text-sm text-gray-900 text-right">${item.rate.toFixed(2)}</td>
-                          <td className="px-4 py-3 text-sm text-gray-900 text-right">${item.amount.toFixed(2)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              {/* Invoice Totals */}
-              <div className="bg-gray-50 rounded-lg p-4">
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Subtotal:</span>
-                    <span className="text-gray-900 font-medium">${selectedInvoice.total_amount.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Tax:</span>
-                    <span className="text-gray-900 font-medium">${selectedInvoice.tax_amount.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Discount:</span>
-                    <span className="text-gray-900 font-medium">-${selectedInvoice.discount_amount.toFixed(2)}</span>
-                  </div>
-                  <div className="border-t border-gray-300 pt-2">
-                    <div className="flex justify-between">
-                      <span className="text-gray-900 font-semibold">Total:</span>
-                      <span className="text-gray-900 font-bold text-lg">
-                        {selectedInvoice.status === 'cancelled' ? (
-                          <span className="line-through text-red-600">${selectedInvoice.final_amount.toFixed(2)}</span>
-                        ) : (
-                          `$${selectedInvoice.final_amount.toFixed(2)}`
-                        )}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Notes */}
-              {selectedInvoice.notes && (
+                )}
                 <div>
-                  <h4 className="text-lg font-semibold text-gray-900 mb-2">Notes</h4>
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <p className="text-gray-700 whitespace-pre-wrap">{selectedInvoice.notes}</p>
-                  </div>
+                  <span className="text-blue-600 font-medium">Recipient:</span>
+                  <div className="text-blue-900">{selectedInvoice.recipient_email}</div>
                 </div>
-              )}
+                <div>
+                  <span className="text-blue-600 font-medium">Total Amount:</span>
+                  <div className="text-blue-900 font-bold">₹{selectedInvoice.final_amount.toFixed(2)}</div>
+                </div>
+              </div>
             </div>
 
-            <div className="flex justify-end mt-6">
-              <button onClick={() => setShowViewModal(false)} className="btn-primary">
+            {/* Invoice Items */}
+            <div className="mb-6">
+              <h4 className="text-lg font-semibold text-gray-900 mb-3">Invoice Items</h4>
+              <div className="overflow-x-auto">
+                <table className="w-full border border-gray-200 rounded-lg">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Description</th>
+                      <th className="px-4 py-3 text-right text-sm font-medium text-gray-700">Hours</th>
+                      <th className="px-4 py-3 text-right text-sm font-medium text-gray-700">Rate</th>
+                      <th className="px-4 py-3 text-right text-sm font-medium text-gray-700">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {selectedInvoice.items.map(item => (
+                      <tr key={item.id}>
+                        <td className="px-4 py-3 text-sm text-gray-900">{item.task_title || item.description}</td>
+                        <td className="px-4 py-3 text-sm text-gray-600 text-right">{item.hours_billed}</td>
+                        <td className="px-4 py-3 text-sm text-gray-600 text-right">₹{item.rate.toFixed(2)}</td>
+                        <td className="px-4 py-3 text-sm text-gray-900 text-right font-medium">₹{item.amount.toFixed(2)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Invoice Totals */}
+            <div className="bg-gray-50 rounded-lg p-4 mb-6">
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span>Subtotal:</span>
+                  <span>₹{selectedInvoice.total_amount.toFixed(2)}</span>
+                </div>
+                {selectedInvoice.tax_amount > 0 && (
+                  <div className="flex justify-between">
+                    <span>Tax:</span>
+                    <span>₹{selectedInvoice.tax_amount.toFixed(2)}</span>
+                  </div>
+                )}
+                {selectedInvoice.discount_amount > 0 && (
+                  <div className="flex justify-between">
+                    <span>Discount:</span>
+                    <span>-₹{selectedInvoice.discount_amount.toFixed(2)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between font-semibold text-lg border-t border-gray-200 pt-2">
+                  <span>Total:</span>
+                  <span>₹{selectedInvoice.final_amount.toFixed(2)}</span>
+                </div>
+              </div>
+            </div>
+
+            {selectedInvoice.notes && (
+              <div className="mb-6">
+                <h4 className="text-lg font-semibold text-gray-900 mb-2">Notes</h4>
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <p className="text-gray-700 whitespace-pre-wrap">{selectedInvoice.notes}</p>
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-end space-x-3">
+              {selectedInvoice.status === 'draft' && (
+                <button
+                  onClick={() => handleSendInvoice(selectedInvoice)}
+                  disabled={isSending}
+                  className="btn-primary"
+                >
+                  {isSending ? (
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                  ) : (
+                    <Send className="w-4 h-4 mr-2" />
+                  )}
+                  <span>{isSending ? 'Sending...' : 'Send Invoice'}</span>
+                </button>
+              )}
+              <button onClick={() => setShowViewModal(false)} className="btn-outline">
                 Close
               </button>
             </div>

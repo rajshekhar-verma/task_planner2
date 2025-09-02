@@ -21,8 +21,8 @@ export interface Project {
   hourly_rate?: number;
   fixed_rate?: number;
   rate_type?: 'hourly' | 'fixed';
-  inr_conversion_rule?: string;
-  inr_conversion_factor?: number;
+  conversion_rule?: string;
+  conversion_factor?: number;
 }
 
 export interface Task {
@@ -67,26 +67,20 @@ export interface Receivable {
   notes?: string;
   task_title?: string;
   project_name?: string;
-  amount_inr?: number;
 }
 
 export interface RevenueRecord {
   id: string;
   receivable_id: string;
   amount: number;
-  amount_inr?: number;
   recorded_at: string;
   notes?: string;
-  exchange_rate?: number;
 }
 
 export interface ReceivableWithRevenue extends Receivable {
   revenue_records: RevenueRecord[];
   total_revenue: number;
-  total_revenue_inr?: number;
   remaining_amount: number;
-  remaining_amount_inr?: number;
-  exchange_rate?: number;
 }
 
 export interface Invoice {

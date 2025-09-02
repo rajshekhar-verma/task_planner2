@@ -148,8 +148,8 @@ const pipelineAmount = (() => {
           <DollarSign className="h-4 w-4 mr-2" />
           <span>
             {project.rate_type === 'hourly' 
-              ? `$${project.hourly_rate}/hour` 
-              : `$${project.fixed_rate} (fixed)`}
+              ? `₹${project.hourly_rate}/hour` 
+              : `₹${project.fixed_rate} (fixed)`}
           </span>
         </div>
         
@@ -185,15 +185,15 @@ const pipelineAmount = (() => {
         </div>
         <div className="bg-yellow-50 p-2 rounded">
           <div className="text-xs text-yellow-500">Total Receivables</div>
-          <div className="font-semibold">${totalReceivables.toFixed(2)}</div>
+          <div className="font-semibold">₹{totalReceivables.toFixed(2)}</div>
         </div>
         <div className="bg-yellow-50 p-2 rounded">
           <div className="text-xs text-yellow-500">Amount In Pipeline</div>
-          <div className="font-semibold">${pipelineAmount.toFixed(2)}</div>
+          <div className="font-semibold">₹{pipelineAmount.toFixed(2)}</div>
         </div>
         <div className="bg-orange-50 p-2 rounded">
           <div className="text-xs text-orange-500">Outstanding</div>
-          <div className="font-semibold">${openAmount.toFixed(2)}</div>
+          <div className="font-semibold">₹{openAmount.toFixed(2)}</div>
         </div>
         <div className="bg-indigo-50 p-2 rounded">
           <div className="text-xs text-indigo-500">Open Items</div>
@@ -218,9 +218,9 @@ const pipelineAmount = (() => {
             <p><span className="font-medium">Priority:</span> {project.priority}</p>
             <p><span className="font-medium">Rate Type:</span> {project.rate_type}</p>
             {project.rate_type === 'hourly' ? (
-              <p><span className="font-medium">Hourly Rate:</span> ${project.hourly_rate}/hour</p>
+              <p><span className="font-medium">Hourly Rate:</span> ₹{project.hourly_rate}/hour</p>
             ) : (
-              <p><span className="font-medium">Fixed Rate:</span> ${project.fixed_rate}</p>
+              <p><span className="font-medium">Fixed Rate:</span> ₹{project.fixed_rate}</p>
             )}
             {project.inr_conversion_factor && (
               <p><span className="font-medium">INR Conversion Factor:</span> {(project.inr_conversion_factor * 100).toFixed(2)}%</p>

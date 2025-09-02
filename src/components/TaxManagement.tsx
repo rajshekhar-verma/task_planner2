@@ -381,8 +381,7 @@ export function TaxManagement({ onRefresh }: TaxManagementProps) {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-blue-700 text-sm font-semibold">Active Revenue</p>
-                <p className="text-2xl font-bold text-blue-900">${stats.totalRevenue.toFixed(2)}</p>
-                <p className="text-sm text-blue-600">₹{stats.totalRevenueInr.toFixed(2)}</p>
+                <p className="text-2xl font-bold text-blue-900">₹{stats.totalRevenue.toFixed(2)}</p>
               </div>
               <div className="p-3 bg-blue-200 rounded-lg">
                 <TrendingUp className="w-6 h-6 text-blue-700" />
@@ -394,8 +393,7 @@ export function TaxManagement({ onRefresh }: TaxManagementProps) {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-red-700 text-sm font-semibold">Tax Liability (15%)</p>
-                <p className="text-2xl font-bold text-red-900">${stats.remainingTaxLiability.toFixed(2)}</p>
-                <p className="text-sm text-red-600">₹{stats.remainingTaxLiabilityInr.toFixed(2)}</p>
+                <p className="text-2xl font-bold text-red-900">₹{stats.remainingTaxLiability.toFixed(2)}</p>
                 <p className="text-xs text-red-500 mt-1">Remaining to pay</p>
               </div>
               <div className="p-3 bg-red-200 rounded-lg">
@@ -408,8 +406,7 @@ export function TaxManagement({ onRefresh }: TaxManagementProps) {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-green-700 text-sm font-semibold">Tax Paid</p>
-                <p className="text-2xl font-bold text-green-900">${stats.totalTaxPaid.toFixed(2)}</p>
-                <p className="text-sm text-green-600">₹{stats.totalTaxPaidInr.toFixed(2)}</p>
+                <p className="text-2xl font-bold text-green-900">₹{stats.totalTaxPaid.toFixed(2)}</p>
                 <div className="flex items-center mt-1">
                   <button
                     onClick={() => setShowPaymentModal(true)}
@@ -430,8 +427,7 @@ export function TaxManagement({ onRefresh }: TaxManagementProps) {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-purple-700 text-sm font-semibold">After-Tax Revenue</p>
-                <p className="text-2xl font-bold text-purple-900">${(stats.totalRevenue - stats.totalTax).toFixed(2)}</p>
-                <p className="text-sm text-purple-600">₹{(stats.totalRevenueInr - stats.totalTaxInr).toFixed(2)}</p>
+                <p className="text-2xl font-bold text-purple-900">₹{(stats.totalRevenue - stats.totalTax).toFixed(2)}</p>
               </div>
               <div className="p-3 bg-purple-200 rounded-lg">
                 <DollarSign className="w-6 h-6 text-purple-700" />
@@ -484,10 +480,7 @@ export function TaxManagement({ onRefresh }: TaxManagementProps) {
                   <div className="flex-1">
                     <div className="flex items-center space-x-3 mb-2">
                       <span className="text-lg font-semibold text-green-900">
-                        ${payment.amount.toFixed(2)}
-                      </span>
-                      <span className="text-sm text-green-700">
-                        (₹{payment.amount_inr.toFixed(2)})
+                        ₹{payment.amount.toFixed(2)}
                       </span>
                       <span className="px-2 py-1 text-xs bg-green-200 text-green-800 rounded-full">
                         PAID
@@ -574,21 +567,16 @@ export function TaxManagement({ onRefresh }: TaxManagementProps) {
                           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
                             <div>
                               <div className="font-medium text-gray-700">Active Revenue</div>
-                              <div className="text-lg font-bold text-gray-900">${record.totalRevenue.toFixed(2)}</div>
-                              <div className="text-sm text-gray-600">₹{record.totalRevenueInr.toFixed(2)}</div>
+                              <div className="text-lg font-bold text-gray-900">₹{record.totalRevenue.toFixed(2)}</div>
                             </div>
                             <div>
                               <div className="font-medium text-gray-700">Tax Liability</div>
-                              <div className="text-lg font-bold text-purple-600">${record.taxAmount.toFixed(2)}</div>
-                              <div className="text-sm text-purple-500">₹{record.taxAmountInr.toFixed(2)}</div>
+                              <div className="text-lg font-bold text-purple-600">₹{record.taxAmount.toFixed(2)}</div>
                             </div>
                             <div>
                               <div className="font-medium text-gray-700">After-Tax Revenue</div>
                               <div className="text-lg font-bold text-green-600">
-                                ${(record.totalRevenue - record.taxAmount).toFixed(2)}
-                              </div>
-                              <div className="text-sm text-green-500">
-                                ₹{(record.totalRevenueInr - record.taxAmountInr).toFixed(2)}
+                                ₹{(record.totalRevenue - record.taxAmount).toFixed(2)}
                               </div>
                             </div>
                             <div>
@@ -621,49 +609,49 @@ export function TaxManagement({ onRefresh }: TaxManagementProps) {
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span className="text-gray-600">Active Revenue:</span>
-                    <span className="font-semibold">${stats.totalRevenue.toFixed(2)}</span>
+                    <span className="font-semibold">₹{stats.totalRevenue.toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-600">Total Tax Liability (15%):</span>
-                    <span className="font-semibold text-purple-600">${stats.totalTax.toFixed(2)}</span>
+                    <span className="font-semibold text-purple-600">₹{stats.totalTax.toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-600">Tax Paid:</span>
-                    <span className="font-semibold text-green-600">${stats.totalTaxPaid.toFixed(2)}</span>
+                    <span className="font-semibold text-green-600">₹{stats.totalTaxPaid.toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between border-t border-purple-200 pt-2">
                     <span className="text-gray-600">Remaining Tax Liability:</span>
-                    <span className="font-bold text-red-600">${stats.remainingTaxLiability.toFixed(2)}</span>
+                    <span className="font-bold text-red-600">₹{stats.remainingTaxLiability.toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-600">After-Tax Revenue:</span>
-                    <span className="font-bold text-green-600">${(stats.totalRevenue - stats.totalTax).toFixed(2)}</span>
+                    <span className="font-bold text-green-600">₹{(stats.totalRevenue - stats.totalTax).toFixed(2)}</span>
                   </div>
                 </div>
               </div>
               
               <div>
-                <h4 className="text-purple-800 font-semibold mb-3">INR Summary</h4>
+                <h4 className="text-purple-800 font-semibold mb-3">Summary</h4>
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span className="text-gray-600">Active Revenue:</span>
-                    <span className="font-semibold">₹{stats.totalRevenueInr.toFixed(2)}</span>
+                    <span className="font-semibold">₹{stats.totalRevenue.toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-600">Total Tax Liability (15%):</span>
-                    <span className="font-semibold text-purple-600">₹{stats.totalTaxInr.toFixed(2)}</span>
+                    <span className="font-semibold text-purple-600">₹{stats.totalTax.toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-600">Tax Paid:</span>
-                    <span className="font-semibold text-green-600">₹{stats.totalTaxPaidInr.toFixed(2)}</span>
+                    <span className="font-semibold text-green-600">₹{stats.totalTaxPaid.toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between border-t border-purple-200 pt-2">
                     <span className="text-gray-600">Remaining Tax Liability:</span>
-                    <span className="font-bold text-red-600">₹{stats.remainingTaxLiabilityInr.toFixed(2)}</span>
+                    <span className="font-bold text-red-600">₹{stats.remainingTaxLiability.toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-600">After-Tax Revenue:</span>
-                    <span className="font-bold text-green-600">₹{(stats.totalRevenueInr - stats.totalTaxInr).toFixed(2)}</span>
+                    <span className="font-bold text-green-600">₹{(stats.totalRevenue - stats.totalTax).toFixed(2)}</span>
                   </div>
                 </div>
               </div>
@@ -691,26 +679,26 @@ export function TaxManagement({ onRefresh }: TaxManagementProps) {
                 <div className="text-sm text-red-800">
                   <div className="flex justify-between">
                     <span><strong>Total Tax Liability:</strong></span>
-                    <span>${stats.totalTax.toFixed(2)}</span>
+                    <span>₹{stats.totalTax.toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span><strong>Already Paid:</strong></span>
-                    <span>${stats.totalTaxPaid.toFixed(2)}</span>
+                    <span>₹{stats.totalTaxPaid.toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between mt-2 pt-2 border-t border-red-300">
                     <span><strong>Remaining:</strong></span>
-                    <span>${stats.remainingTaxLiability.toFixed(2)}</span>
+                    <span>₹{stats.remainingTaxLiability.toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between mt-1">
                     <span><strong>Exchange Rate:</strong></span>
-                    <span>1 USD = ₹{exchangeRate?.toFixed(2) || '...'}</span>
+                    <span>₹{exchangeRate?.toFixed(2) || '...'} per USD</span>
                   </div>
                 </div>
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Payment Amount (USD) *
+                  Payment Amount (₹) *
                 </label>
                 <input
                   type="number"
@@ -723,10 +711,7 @@ export function TaxManagement({ onRefresh }: TaxManagementProps) {
                 />
                 <div className="flex justify-between mt-1">
                   <p className="text-xs text-gray-500">
-                    Maximum recommended: ${stats.remainingTaxLiability.toFixed(2)}
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    ₹{convertUSDtoINR(paymentAmount).toFixed(2)} INR
+                    Maximum recommended: ₹{stats.remainingTaxLiability.toFixed(2)}
                   </p>
                 </div>
               </div>

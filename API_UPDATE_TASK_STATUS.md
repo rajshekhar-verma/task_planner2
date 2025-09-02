@@ -68,7 +68,7 @@ curl -X PATCH \
     "status": "completed",
     "hours_worked": 8.5
   }' \
-  "https://trhcrteklsoeoqrfsxlp.supabase.co/functions/v1/update-task-status"
+  "https://your-project.supabase.co/functions/v1/update-task-status"
 ```
 
 ### 2. Move Task to In Progress
@@ -81,7 +81,7 @@ curl -X PATCH \
     "status": "in_progress",
     "progress_percentage": 30
   }' \
-  "https://trhcrteklsoeoqrfsxlp.supabase.co/functions/v1/update-task-status"
+  "https://your-project.supabase.co/functions/v1/update-task-status"
 ```
 
 ### 3. Archive Task
@@ -94,7 +94,7 @@ curl -X PATCH \
     "status": "archived",
     "notes": "Task no longer needed"
   }' \
-  "https://trhcrteklsoeoqrfsxlp.supabase.co/functions/v1/update-task-status"
+  "https://your-project.supabase.co/functions/v1/update-task-status"
 ```
 
 ## Response Format

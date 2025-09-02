@@ -180,7 +180,7 @@ export function EditProjectModal({ project, onClose, onSubmit }: EditProjectModa
           {formData.rate_type === 'hourly' ? (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Hourly Rate ($)
+                Hourly Rate (₹)
               </label>
               <input
                 type="number"
@@ -189,13 +189,13 @@ export function EditProjectModal({ project, onClose, onSubmit }: EditProjectModa
                 min="0"
                 step="0.01"
                 className="input"
-                placeholder="50.00"
+                placeholder="4000.00"
               />
             </div>
           ) : (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Fixed Amount ($)
+                Fixed Amount (₹)
               </label>
               <input
                 type="number"
@@ -204,7 +204,7 @@ export function EditProjectModal({ project, onClose, onSubmit }: EditProjectModa
                 min="0"
                 step="0.01"
                 className="input"
-                placeholder="5000.00"
+                placeholder="400000.00"
               />
             </div>
           )}
@@ -236,7 +236,7 @@ export function EditProjectModal({ project, onClose, onSubmit }: EditProjectModa
               placeholder="100.00"
             />
             <p className="text-xs text-gray-500 mt-1">
-              Percentage of standard USD-INR conversion rate (e.g., 99.97 for 99.97% of standard rate)
+              Percentage adjustment for rupee calculations (e.g., 99.97 for 99.97% of base rate)
             </p>
             
             {showConversionHelp && (

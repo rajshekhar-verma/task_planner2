@@ -291,14 +291,14 @@ export function TaskDetailsModal({ task, project, onClose }: TaskDetailsModalPro
                   </div>
                   <span className="text-2xl font-bold text-yellow-900">
                     {project && project.rate_type === 'hourly' && task.hours_worked 
-                      ? `$${((task.hours_worked || 0) * (project.hourly_rate || 0)).toFixed(0)}`
+                      ? `₹${((task.hours_worked || 0) * (project.hourly_rate || 0)).toFixed(0)}`
                       : '—'
                     }
                   </span>
                 </div>
                 <h4 className="text-yellow-700 font-semibold">Estimated Value</h4>
                 <p className="text-yellow-600 text-sm mt-1">
-                  {project?.rate_type === 'hourly' ? `$${project.hourly_rate || 0}/hour` : 'Fixed rate'}
+                  {project?.rate_type === 'hourly' ? `₹${project.hourly_rate || 0}/hour` : 'Fixed rate'}
                 </p>
               </div>
             </div>
@@ -359,8 +359,8 @@ export function TaskDetailsModal({ task, project, onClose }: TaskDetailsModalPro
                             <div className="text-blue-600 text-sm font-semibold mb-1">Rate</div>
                             <div className="text-blue-900 font-bold">
                               {project.rate_type === 'fixed' 
-                                ? `$${project.fixed_rate || 0}` 
-                                : `$${project.hourly_rate || 0}/h`}
+                                ? `₹${project.fixed_rate || 0}` 
+                                : `₹${project.hourly_rate || 0}/h`}
                             </div>
                           </div>
                         </div>

@@ -357,7 +357,7 @@ export function ReceivablesManagement({ receivables, projects, onRefresh }: Rece
             {/* Exchange Rate Info */}
             <div className="flex items-center space-x-2 bg-blue-50 px-3 py-1 rounded-lg">
               <span className="text-sm text-blue-700">
-                1 USD = ₹{exchangeRate?.toFixed(2) || '...'}
+                Exchange Rate: ₹{exchangeRate?.toFixed(2) || '...'} per USD
               </span>
               <button 
                 onClick={refreshRate}
@@ -417,7 +417,7 @@ export function ReceivablesManagement({ receivables, projects, onRefresh }: Rece
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-blue-600 text-sm font-medium">Total Receivables</p>
-                <p className="text-2xl font-bold text-blue-900">${stats.totalReceivables.toFixed(2)}</p>
+                <p className="text-2xl font-bold text-blue-900">₹{stats.totalReceivables.toFixed(2)}</p>
               </div>
               <FileText className="w-8 h-8 text-blue-600" />
             </div>
@@ -427,8 +427,7 @@ export function ReceivablesManagement({ receivables, projects, onRefresh }: Rece
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-green-600 text-sm font-medium">Total Revenue</p>
-                <p className="text-2xl font-bold text-green-900">${stats.totalRevenue.toFixed(2)}</p>
-                <p className="text-sm text-green-700">₹{stats.totalRevenueInr.toFixed(2)}</p>
+                <p className="text-2xl font-bold text-green-900">₹{stats.totalRevenue.toFixed(2)}</p>
               </div>
               <TrendingUp className="w-8 h-8 text-green-600" />
             </div>
@@ -438,7 +437,7 @@ export function ReceivablesManagement({ receivables, projects, onRefresh }: Rece
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-orange-600 text-sm font-medium">Outstanding</p>
-                <p className="text-2xl font-bold text-orange-900">${stats.totalOutstanding.toFixed(2)}</p>
+                <p className="text-2xl font-bold text-orange-900">₹{stats.totalOutstanding.toFixed(2)}</p>
               </div>
               <Clock className="w-8 h-8 text-orange-600" />
             </div>
@@ -541,24 +540,18 @@ export function ReceivablesManagement({ receivables, projects, onRefresh }: Rece
                             <div className="grid grid-cols-3 gap-4 text-sm">
                               <div>
                                 <div className="font-medium text-gray-700">Total Amount</div>
-                                <div className="text-lg font-bold text-gray-900">${receivable.amount.toFixed(2)}</div>
+                                <div className="text-lg font-bold text-gray-900">₹{receivable.amount.toFixed(2)}</div>
                               </div>
                               <div>
                                 <div className="font-medium text-gray-700">Revenue Recorded</div>
-                                <div className="text-lg font-bold text-green-600">${receivable.total_revenue.toFixed(2)}</div>
-                                {(receivable.status === 'paid' || receivable.status === 'cancelled') && (
-                                  <div className="flex items-center text-sm text-green-500">
-                                    <IndianRupee className="h-3 w-3 mr-1" />
-                                    <span>₹{receivable.total_revenue_inr?.toFixed(2) || convertUSDtoINR(receivable.total_revenue, project).toFixed(2)}</span>
-                                  </div>
-                                )}
+                                <div className="text-lg font-bold text-green-600">₹{receivable.total_revenue.toFixed(2)}</div>
                               </div>
                               <div>
                                 <div className="font-medium text-gray-700">
                                   {receivable.status === 'cancelled' ? 'Was Remaining' : 'Remaining'}
                                 </div>
                                 <div className={`text-lg font-bold ${receivable.status === 'cancelled' ? 'text-red-600' : 'text-orange-600'}`}>
-                                  ${receivable.remaining_amount.toFixed(2)}
+                                  ₹{receivable.remaining_amount.toFixed(2)}
                                 </div>
                               </div>
                             </div>
@@ -572,10 +565,7 @@ export function ReceivablesManagement({ receivables, projects, onRefresh }: Rece
                                 {receivable.revenue_records.map(record => (
                                   <div key={record.id} className="flex justify-between items-center text-xs text-gray-600 bg-green-50 px-2 py-1 rounded">
                                     <span>
-                                      ${record.amount.toFixed(2)} 
-                                      <span className="text-green-600 ml-1">
-                                        (₹{record.amount_inr?.toFixed(2) || convertUSDtoINR(record.amount, project).toFixed(2)})
-                                      </span>
+                                      ₹{record.amount.toFixed(2)}
                                       - {format(new Date(record.recorded_at), 'MMM dd, yyyy')}
                                     </span>
                                     {record.notes && <span className="italic">"{record.notes}"</span>}
@@ -630,15 +620,15 @@ export function ReceivablesManagement({ receivables, projects, onRefresh }: Rece
                   <div><strong>Task:</strong> {selectedReceivable.task_title}</div>
                   <div className="flex justify-between">
                     <span><strong>Total Amount:</strong></span>
-                    <span>${selectedReceivable.amount.toFixed(2)}</span>
+                    <span>₹{selectedReceivable.amount.toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span><strong>Already Paid:</strong></span>
-                    <span>${selectedReceivable.total_revenue.toFixed(2)}</span>
+                    <span>₹{selectedReceivable.total_revenue.toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span><strong>Remaining:</strong></span>
-                    <span>${selectedReceivable.remaining_amount.toFixed(2)}</span>
+                    <span>₹{selectedReceivable.remaining_amount.toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between mt-2 pt-2 border-t border-gray-200">
                     <span><strong>Exchange Rate:</strong></span>
@@ -657,7 +647,7 @@ export function ReceivablesManagement({ receivables, projects, onRefresh }: Rece
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Payment Amount (USD) *
+                  Payment Amount (₹) *
                 </label>
                 <input
                   type="number"
@@ -671,13 +661,7 @@ export function ReceivablesManagement({ receivables, projects, onRefresh }: Rece
                 />
                 <div className="flex justify-between mt-1">
                   <p className="text-xs text-gray-500">
-                    Maximum: ${selectedReceivable.remaining_amount.toFixed(2)}
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    ₹{convertUSDtoINR(
-                      paymentAmount,
-                      projects.find(p => p.id === selectedReceivable.project_id)
-                    ).toFixed(2)} INR
+                    Maximum: ₹{selectedReceivable.remaining_amount.toFixed(2)}
                   </p>
                 </div>
               </div>

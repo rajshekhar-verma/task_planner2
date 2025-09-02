@@ -30,7 +30,7 @@ WHERE is_active = true;
 
 ### Request Setup:
 - **Method:** `GET`
-- **URL:** `https://trhcrteklsoeoqrfsxlp.supabase.co/functions/v1/third-party-api`
+- **URL:** `https://your-project.supabase.co/functions/v1/third-party-api`
 
 ### Headers Tab:
 Add these two headers:
@@ -87,7 +87,7 @@ Run this in terminal to verify:
 curl -X GET \
   -H "X-API-Key: tmp_QZ09tcj8g9k5Vf5TQ3vxhLUJWs48Rt2y" \
   -H "Content-Type: application/json" \
-  "https://trhcrteklsoeoqrfsxlp.supabase.co/functions/v1/third-party-api"
+  "https://your-project.supabase.co/functions/v1/third-party-api"
 ```
 
 ## Troubleshooting

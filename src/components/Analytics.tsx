@@ -209,7 +209,7 @@ export function Analytics({ tasks, projects, receivables, invoices }: AnalyticsP
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-yellow-600 text-sm font-medium">Active Revenue</p>
-                <p className="text-2xl font-bold text-yellow-900">${totalRevenue.toFixed(0)}</p>
+                <p className="text-2xl font-bold text-yellow-900">₹{totalRevenue.toFixed(0)}</p>
               </div>
               <span className="text-2xl">💰</span>
             </div>
@@ -333,21 +333,21 @@ export function Analytics({ tasks, projects, receivables, invoices }: AnalyticsP
               <div className="bg-white p-4 rounded-lg border border-blue-200">
                 <div className="flex justify-between items-center">
                   <span className="text-blue-700 font-medium">Collected Revenue</span>
-                  <span className="text-2xl font-bold text-blue-900">${paidRevenue.toFixed(2)}</span>
+                  <span className="text-2xl font-bold text-blue-900">₹{paidRevenue.toFixed(2)}</span>
                 </div>
               </div>
               
               <div className="bg-white p-4 rounded-lg border border-orange-200">
                 <div className="flex justify-between items-center">
                   <span className="text-orange-700 font-medium">Outstanding</span>
-                  <span className="text-2xl font-bold text-orange-900">${(totalRevenue - paidRevenue).toFixed(2)}</span>
+                  <span className="text-2xl font-bold text-orange-900">₹{(totalRevenue - paidRevenue).toFixed(2)}</span>
                 </div>
               </div>
               
               <div className="bg-white p-4 rounded-lg border border-red-200">
                 <div className="flex justify-between items-center">
                   <span className="text-red-700 font-medium">Cancelled Amount</span>
-                  <span className="text-2xl font-bold text-red-900">${cancelledAmount.toFixed(2)}</span>
+                  <span className="text-2xl font-bold text-red-900">₹{cancelledAmount.toFixed(2)}</span>
                 </div>
               </div>
               
